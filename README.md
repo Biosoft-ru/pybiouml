@@ -12,7 +12,7 @@ Documentation and use cases for pybiouml are presented available here:
 
 ## Instalation
 For library instalation you can use the package 
-manager [pip]().
+manager [pip](https://pypi.org/project/pybiouml/).
 
 ```bash
 pip install pybiouml 
