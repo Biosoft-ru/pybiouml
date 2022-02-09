@@ -1,8 +1,8 @@
 # pybiouml
 
-BioUML - an integrated environment
+[BioUML](https://www.biouml.org/) - an integrated environment
 for systems biology and collaborative analysis of biomedical data.
- library is a python interface which gives an opportunity to use BioUML 
+This library is a python interface which gives an opportunity to use BioUML 
 through python scripts.
  
 ## Documentation
