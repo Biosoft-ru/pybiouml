@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import numpy as np
 import requests
 import datetime
 import time
@@ -7,9 +8,13 @@ import os
 from progress.bar import Bar
 
 
+
+
+
 def load_file(file_path):
     with open(file_path, 'rb') as inp:
-        return inp
+        file = inp.read()
+        return file
 
 
 def write_file(file, file_path):
@@ -23,14 +28,16 @@ def parsing_login_file(file):
 
 
 def check_type(var):
-    if var.dtypes == type(int):
-        return "Integer"
-    elif var.dtypes == type(float):
-        return "Float"
-    elif var.dtypes == type(bool):
-        return "Boolean"
-    elif var.dtypes == type(str):
+    if var == type(object):
         return "Text"
+    elif (var == type(float)) or var == np.dtype(float):
+        return "Float"
+    elif (var == type(bool)) or var == np.dtype(bool):
+        return "Boolean"
+    elif var == type(str):
+        return "Text"
+    elif (var == type(int)) or var == np.dtype(int):
+        return "Integer"
     else:
         raise Exception(f'Can not put to biouml column of type {type(var)}')
 
@@ -121,7 +128,7 @@ class PyBiouml:
         if 'hidden' in table_info.columns:
             table_info = table_info[table_info['hidden'] != True]
         crafted_table = pd.DataFrame(table_data, index=table_info['name'].to_list()).T
-        return crafted_table
+        return crafted_table.loc[:, crafted_table.columns != 'ID']
 
     def get_connection(self):
         """
@@ -249,7 +256,8 @@ class PyBiouml:
         self.query_json('/web/analysis', jobID=job_id, de=analysis_name, json=parameters)
         if wait:
             self.job_wait(job_id=job_id, verbose=verbose)
-        return job_id
+
+        return print(job_id)
 
     def next_job_id(self):
         """
@@ -261,7 +269,7 @@ class PyBiouml:
         last_job_id = self.info.setdefault('last_job_id', 0)
         n_job_id = last_job_id + 1
         self.info['last_job_id'] = n_job_id
-        return ''.join(['RJOB', datetime.datetime.now(), n_job_id])
+        return ''.join(['RJOB', str(datetime.datetime.now().strftime('%Y%m%d%H%M%S')), str(n_job_id)])
 
     def job_info(self, job_id):
         """
@@ -295,11 +303,11 @@ class PyBiouml:
                 info = self.job_info(job_id)
                 if verbose:
                     if info['percent'] is not None:
-                        bar.index = info['percent']
+                        bar.index = int(info['percent'])
                         bar.next()
                     if info['values'] is not None:
-                        print(info['values'][message_length:])
-                        message_length = len(info['values'])
+                        print(info['values'][0][message_length:])
+                        message_length = len(info['values'][0])
                 if info['status'] in STATUSES:
                     return info
                 time.sleep(1)
@@ -351,13 +359,15 @@ class PyBiouml:
         :type value: DataFrame
         """
         columns = []
-        columns[0] = {'name': 'ID', 'type': 'Text'}
+        columns.append({'name': 'ID', 'type': 'Text'})
         data = []
-        data[0] = value.index
+        v_c = value.index.values.astype(str, copy=True)
+        data.append(v_c.tolist())
+        for i, v in enumerate(value.columns):
+            columns.append({'name': v, 'type': check_type(value.dtypes[v])})
+            str_column = value[v].astype(str, copy=True)
+            data.append(str_column.tolist())
 
-        for i, v in enumerate(value.columns()):
-            columns[i + 1] = {'name': v, 'type': check_type(value.dtypes[v])}
-            data[i + 1] = value[v]
         self.query_json('/web/table/createTable', de=path, columns=json.dumps(columns), data=json.dumps(data))
 
     def export(self, path, exporter_params=None, exporter='Tab-separated text (*.txt)', target_file='biouml.out'):
@@ -398,19 +408,20 @@ class PyBiouml:
 
         if importer_params is None:
             importer_params = []
-        field_id = self.next_job_id()
+        file_id = self.next_job_id()
         job_id = self.next_job_id()
-        data = {'filedID': field_id}
-        self.query('/web/upload', data=data, file={'loaded_file': load_file(file)})
+        data = {'fileID': file_id}
+        filename = os.path.basename(file)
+        self.query('/web/upload', data=data, file={'file': (filename, load_file(file))})
         params = {'type': 'import',
-                  'fileID': field_id,
+                  'fileID': file_id,
                   'de': parentPath,
                   'jobID': job_id,
                   'format': importer,
                   'json': json.dumps(importer_params)
                   }
         self.query_json('/web/import', parameters=params)
-        return self.job_wait(job_id)['result'][0]
+        return self.job_wait(job_id)['results'][0]
 
     def ls(self, path, extended=False):
         """

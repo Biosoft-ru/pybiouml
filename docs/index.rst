@@ -11,3 +11,4 @@ Welcome to pybiouml's documentation!
    :caption: Python API:
 
    source/api/pybiouml
+   source/examples/Use_cases

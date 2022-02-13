@@ -21,7 +21,7 @@ copyright = '2022, Mikhail Kulyashov'
 author = 'Mikhail Kulyashov'
 
 # The full version, including alpha/beta/rc tags
-release = '0.0.1'
+release = '1.0.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -33,6 +33,7 @@ extensions = [
     'recommonmark',
     'sphinx.ext.autodoc',
     'sphinx.ext.viewcode',
+    'nbsphinx'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
