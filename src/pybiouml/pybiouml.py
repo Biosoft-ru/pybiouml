@@ -8,9 +8,6 @@ import os
 from progress.bar import Bar
 
 
-
-
-
 def load_file(file_path):
     with open(file_path, 'rb') as inp:
         file = inp.read()
@@ -96,7 +93,10 @@ def expand(e, prop):
 def column(params, prop):
     result = []
     for e in params:
-        expand_result = expand(e, prop)
+        try:
+            expand_result = expand(e, prop)
+        except:
+            expand_result = None
         if isinstance(dict(), type(expand_result)):
             deexpand(expand_result, result)
         else:
@@ -108,10 +108,10 @@ class PyBiouml:
     """
     This library is a python API interface for using BioUML Web service
     """
+
     def __init__(self):
         self.options = {}
         self.info = {}
-
 
     def get(self, path):
         """
@@ -384,11 +384,14 @@ class PyBiouml:
         """
         if exporter_params is None:
             exporter_params = []
+        else:
+            exporter_params = self.as_tree(exporter_params)
         data = {'exporter': exporter,
                 'type': 'de',
                 'detype': 'Element',
                 'de': path,
-                'parameters': json.dumps(exporter_params)}
+                'parameters': exporter_params}
+        print(exporter_params)
         content = self.query('/web/export', data=data, binary=True)
         write_file(content.content, target_file)
 
@@ -408,6 +411,8 @@ class PyBiouml:
 
         if importer_params is None:
             importer_params = []
+        else:
+            importer_params = self.as_tree(importer_params)
         file_id = self.next_job_id()
         job_id = self.next_job_id()
         data = {'fileID': file_id}
@@ -418,7 +423,7 @@ class PyBiouml:
                   'de': parentPath,
                   'jobID': job_id,
                   'format': importer,
-                  'json': json.dumps(importer_params)
+                  'json': importer_params
                   }
         self.query_json('/web/import', parameters=params)
         return self.job_wait(job_id)['results'][0]
@@ -489,6 +494,8 @@ class PyBiouml:
         """
         if parameters is None:
             parameters = []
+        else:
+            parameters = self.as_tree(parameters)
         job_id = self.next_job_id()
         self.query_json('/web/research',
                         jobID=job_id,
@@ -513,7 +520,8 @@ class PyBiouml:
                                        parameters=params)['values']
         name = column(query_params, 'name')
         desc = column(query_params, 'description')
-        return pd.DataFrame({'Name': name, 'Description': desc})
+        param_type = column(query_params, 'type')
+        return pd.DataFrame({'Name': name, 'Description': desc, 'Type': param_type})
 
     def analysis_parameters(self, analysis_name):
         """
@@ -537,12 +545,12 @@ class PyBiouml:
         :return: DataFrame which contains row with names corresponding to parameter names and one column ’description’ with parameter description
         :rtype: pandas.DataFrame
         """
-        self.parameters('/web/export',
-                        de=path,
-                        detype='Element',
-                        type='deParams',
-                        exporter=exporter
-                        )
+        return self.parameters('/web/export',
+                               de=path,
+                               detype='Element',
+                               type='deParams',
+                               exporter=exporter
+                               )
 
     def import_parameters(self, path, importer):
         """
@@ -555,10 +563,10 @@ class PyBiouml:
         :return: DataFrame which contains row with names corresponding to parameter names and one column ’description’ with parameter description
         :rtype: pandas.DataFrame
         """
-        self.parameters('/web/export',
-                        de=path,
-                        detype='Element',
-                        type='properties',
-                        format=importer,
-                        jobID=self.next_job_id()
-                        )
+        return self.parameters('/web/import',
+                               de=path,
+                               detype='Element',
+                               type='properties',
+                               format=importer,
+                               jobID=self.next_job_id()
+                               )
