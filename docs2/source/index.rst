@@ -10,10 +10,6 @@ Welcome to pybiouml's documentation!
    :maxdepth: 2
    :caption: Python API:
 
-
-
-Indices and tables
-==================
-
-   source/api/pybiouml
-   source/examples/Use_cases
+   api/pybiouml
+   examples/Use_cases
+   
