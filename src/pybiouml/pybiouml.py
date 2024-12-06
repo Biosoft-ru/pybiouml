@@ -5,6 +5,8 @@ import requests
 import datetime
 import time
 import os
+import urllib3
+
 from progress.bar import Bar
 
 
@@ -13,16 +15,13 @@ def load_file(file_path):
         file = inp.read()
         return file
 
-
 def write_file(file, file_path):
     with open(file_path, 'wb') as out:
         out.write(file)
 
-
 def parsing_login_file(file):
     with open(file, 'r') as f:
         return {e.split('\t')[0].strip(): e.split('\t')[1].strip() for e in f.readlines()}
-
 
 def check_type(var):
     if var == type(object):
@@ -36,8 +35,7 @@ def check_type(var):
     elif (var == type(int)) or var == np.dtype(int):
         return "Integer"
     else:
-        raise Exception(f'Can not put to biouml column of type {type(var)}')
-
+        raise Exception(f'Cannot put to BioUML column of type {type(var)}')
 
 def dictionary_converter(dic_for_parsing):
     converted_dictionary = {}
@@ -53,7 +51,6 @@ def dictionary_converter(dic_for_parsing):
                     PyBiouml().as_name_value(v1)
     return converted_dictionary
 
-
 def adder(object, dictionary, value):
     if len(object) != 1:
         dictionary.setdefault(object[0], {})
@@ -62,10 +59,8 @@ def adder(object, dictionary, value):
     else:
         dictionary[object[0]] = value
 
-
 def list_to_dataframe():
     pass
-
 
 def deexpand(dic, final_list, key=None):
     for k, v in dic.items():
@@ -78,17 +73,14 @@ def deexpand(dic, final_list, key=None):
                 else:
                     final_list.append(f'{key}/{k}/{e}')
 
-
 def expand(e, prop):
     if 'type' in e.keys() and e['type'] == 'composite':
         result = []
         for el in e['value']:
             result.append(expand(el, prop))
         return {e[prop]: result}
-
     else:
         return e[prop]
-
 
 def column(params, prop):
     result = []
@@ -103,7 +95,6 @@ def column(params, prop):
             result.append(expand_result)
     return result
 
-
 class PyBiouml:
     """
     This library is a python API interface for using BioUML Web service
@@ -112,6 +103,7 @@ class PyBiouml:
     def __init__(self):
         self.options = {}
         self.info = {}
+        self.stats = []  # List to store statistics for each request
 
     def get(self, path):
         """
@@ -136,6 +128,7 @@ class PyBiouml:
 
         :return connection: connection link
         """
+        urllib3.disable_warnings()
         connection = self.options
         if len(connection.keys()) == 0:
             LINK_TO_CONF_FILE = '/home/jovyan/work/.user.txt'
@@ -147,9 +140,27 @@ class PyBiouml:
                 raise Exception('Not logged into biouml, run PyBiouml().login() first')
         return connection
 
+    def query(self, servers_path, data, file=None, binary=False):
+        """
+        Service method for making post request with time and size logging
+
+        :return: result of post request
+        """
+
+
+
+        connection = self.get_connection()
+        url = ''.join([connection['url'], servers_path])
+        if file:
+            response = requests.post(url, data=data, cookies=self.options['cookie'], verify=False, files=file)
+        else:
+            response = requests.post(url, data=data, cookies=self.options['cookie'], verify=False)
+
+        return response
+
     def query_json(self, server_path, reconnect=True, parameters=None, **params):
         """
-        Service method for json return of connection.
+        Service method for json return of connection with time and size logging
 
         :param server_path: path to required server.
         :type server_path: str
@@ -166,28 +177,23 @@ class PyBiouml:
             parameters.update(params)
         connect = self.query(server_path, parameters)
         json_content = connect.json()
+
         response_type = json_content.get('type')
         if response_type == 3 & reconnect:
             self.reconnect()
             return self.query_json(server_path=server_path, reconnect=False, parameters=parameters)
         elif response_type != 0:
             raise Exception(json_content.get('message'))
+
         return json_content
 
-    def query(self, servers_path, data, file=None, binary=False):
+    def get_stats(self):
         """
-        Service method for making post request
+        Retrieve statistics for all requests
 
-        :return: result of post request
+        :return: List of statistics dictionaries
         """
-        connection = self.get_connection()
-        url = ''.join([connection['url'], servers_path])
-        return requests.post(url,
-                             data=data,
-                             cookies=self.options['cookie'],
-                             verify=False,
-                             files=file
-                             )
+        return self.stats
 
     def login(self, url='http://localhost:8080/biouml', user='', password=''):
         """
@@ -386,13 +392,24 @@ class PyBiouml:
             exporter_params = []
         else:
             exporter_params = self.as_tree(exporter_params)
+
+        start_time = time.time()
+
         data = {'exporter': exporter,
                 'type': 'de',
                 'detype': 'Element',
                 'de': path,
                 'parameters': exporter_params}
-        print(exporter_params)
         content = self.query('/web/export', data=data, binary=True)
+
+        end_time = time.time()
+        elapsed_time = round(end_time - start_time, 6)
+
+        self.stats.append({
+            'Type': 'Exporting',
+            'File name': os.path.basename(target_file),
+            'Upload time': f'{elapsed_time} seconds'
+        })
         write_file(content.content, target_file)
 
     def to_import(self, file, parentPath, importer, importer_params=None):
@@ -402,7 +419,7 @@ class PyBiouml:
         :param file: The name of file to import.
         :param parentPath: Path to folder in BioUML repository.
         :type parentPath: str
-        :param importer: character string specifying format, PyBiouml.importers provides list of posible values
+        :param importer: character string specifying format, PyBiouml.importers() provides list of posible values
         :type importer: str
         :param importer_params: dictionary of parameters to importer
         :return: Resulting path in BioUML repository
@@ -413,10 +430,14 @@ class PyBiouml:
             importer_params = []
         else:
             importer_params = self.as_tree(importer_params)
+
+        start_time = time.time()
+
         file_id = self.next_job_id()
         job_id = self.next_job_id()
         data = {'fileID': file_id}
         filename = os.path.basename(file)
+        start_time = time.time()
         self.query('/web/upload', data=data, file={'file': (filename, load_file(file))})
         params = {'type': 'import',
                   'fileID': file_id,
@@ -426,6 +447,21 @@ class PyBiouml:
                   'json': importer_params
                   }
         self.query_json('/web/import', parameters=params)
+
+        end_time = time.time()
+        elapsed_time = round(end_time - start_time, 6)
+
+        file_size = os.path.getsize(file)
+
+        self.stats.append({
+            'Type': 'Importing',
+            'File name': filename,
+            'jobID': job_id,
+            'fileID': file_id,
+            'Upload time': f'{elapsed_time} seconds',
+            'File size': f'{file_size} bytes'
+        })
+
         return self.job_wait(job_id)['results'][0]
 
     def ls(self, path, extended=False):
