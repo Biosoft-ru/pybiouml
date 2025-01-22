@@ -8,7 +8,7 @@ through python scripts.
 ## Documentation
 
 Documentation and use cases for pybiouml are presented available here:   
-[Documentation and use cases](https://pybiouml.readthedocs.io/en/latest/source/api/pybiouml.html) 
+[Documentation and use cases](https://pybiouml.readthedocs.io/en/latest/) 
 
 ## Instalation
 For library instalation you can use the package 
